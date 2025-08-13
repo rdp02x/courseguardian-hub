@@ -26,13 +26,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const initializeAuth = async () => {
       const token = Cookies.get('access_token');
       if (token) {
-        try {
-          const userData = await authAPI.getCurrentUser();
-          setUser(userData);
-        } catch (error) {
-          console.error('Failed to get current user:', error);
-          Cookies.remove('access_token');
-          Cookies.remove('refresh_token');
+        // Check if it's a demo token
+        if (token === 'demo_token') {
+          // Set demo user based on what was stored or default to admin
+          const demoUser = {
+            id: 1,
+            email: 'admin@demo.com',
+            firstName: 'Admin',
+            lastName: 'User',
+            role: 'admin' as const,
+            createdAt: new Date().toISOString()
+          };
+          setUser(demoUser);
+        } else {
+          // Try to get real user data from API
+          try {
+            const userData = await authAPI.getCurrentUser();
+            setUser(userData);
+          } catch (error) {
+            console.error('Failed to get current user:', error);
+            Cookies.remove('access_token');
+            Cookies.remove('refresh_token');
+          }
         }
       }
       setLoading(false);
@@ -42,18 +57,70 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
+    // Demo credentials for testing
+    const demoCredentials = [
+      {
+        email: 'admin@demo.com',
+        password: 'admin123',
+        user: {
+          id: 1,
+          email: 'admin@demo.com',
+          firstName: 'Admin',
+          lastName: 'User',
+          role: 'admin' as const,
+          createdAt: new Date().toISOString()
+        }
+      },
+      {
+        email: 'student@demo.com',
+        password: 'student123',
+        user: {
+          id: 2,
+          email: 'student@demo.com',
+          firstName: 'John',
+          lastName: 'Student',
+          role: 'student' as const,
+          createdAt: new Date().toISOString()
+        }
+      }
+    ];
+
+    // Check for demo credentials first
+    const demoUser = demoCredentials.find(
+      cred => cred.email === email && cred.password === password
+    );
+
+    if (demoUser) {
+      // Simulate demo login
+      Cookies.set('access_token', 'demo_token', {
+        expires: 1,
+        secure: false, // Set to false for demo
+        sameSite: 'lax'
+      });
+      
+      Cookies.set('refresh_token', 'demo_refresh_token', {
+        expires: 7,
+        secure: false, // Set to false for demo
+        sameSite: 'lax'
+      });
+
+      setUser(demoUser.user);
+      toast.success(`Welcome ${demoUser.user.firstName}! (Demo Mode)`);
+      return true;
+    }
+
+    // If not demo credentials, try real API (when backend is ready)
     try {
       const response = await authAPI.login(email, password);
       
-      // Store tokens in httpOnly cookies for security
       Cookies.set('access_token', response.access, {
-        expires: 1, // 1 day
+        expires: 1,
         secure: true,
         sameSite: 'strict'
       });
       
       Cookies.set('refresh_token', response.refresh, {
-        expires: 7, // 7 days
+        expires: 7,
         secure: true,
         sameSite: 'strict'
       });
@@ -62,7 +129,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       toast.success('Login successful!');
       return true;
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Login failed');
+      toast.error(error.response?.data?.message || 'Invalid email or password. Try demo credentials: admin@demo.com/admin123 or student@demo.com/student123');
       return false;
     }
   };
